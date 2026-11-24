@@ -1,0 +1,11 @@
+CompileFlags:
+  Add:
+    - "-std=c++17"
+    - "-I."
+    - "-IInclude"
+    - "-IGLFW"
+    - "-IGLFW/Include"
+    - "-IImGUI"
+    - "-IImGUI/backends"
+    - "-IScintilla/Include"
+    - "-ILexilla/Include"
