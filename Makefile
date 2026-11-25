@@ -16,10 +16,14 @@ all: $(TARGET)
 $(TARGET): $(OBJECTS)
 	$(CXX) $(OBJECTS) -o $(TARGET) $(LDFLAGS)
 	rm -f Build/$(TARGET)
-	mv $(TARGET) Build/
-	cp GLFW/lib/glfw3.dll Build/
-	cp Scintilla/Bin/Scintilla.dll Build/
-	cp Lexilla/Bin/lexilla.dll Build/
+	cp $(TARGET) Build
+	rm -f $(TARGET)
+
+	cp Welcome.md Build
+	cp -r Assets Build
+	cp GLFW/lib/glfw3.dll Build
+	cp Scintilla/Bin/Scintilla.dll Build
+	cp Lexilla/Bin/lexilla.dll Build
 
 $(OBJDIR)/Main.o: Src/Main.cpp $(HEADERS) | $(OBJDIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
@@ -53,5 +57,5 @@ run:
 
 clean:
 	rm -f Build/$(TARGET) $(OBJDIR)/*.o
-
-
+
+

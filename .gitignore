@@ -1,2 +1,9 @@
 # Gitignore
-Builds/
+Build/*.exe
+Build/*.dll
+Build/imgui.ini
+Build/RecentWorkspaces.txt
+Build/Config.json
+Build/Assets
+
+
