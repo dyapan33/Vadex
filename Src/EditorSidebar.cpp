@@ -122,7 +122,7 @@ void CodeEditor::RenderActivityBar(float WorkAreaHeight) {
         TargetButtonIndex = IndexOutline;
     }
 
-    float TargetY = static_cast<float>(TargetButtonIndex) * ButtonSize;
+    float TargetY = (ActiveSidebarPanel == SidebarPanelSettings) ? (WorkAreaHeight - ButtonSize) : (static_cast<float>(TargetButtonIndex) * ButtonSize);
     float DeltaTime = ImGui::GetIO().DeltaTime;
 
     if (DeltaTime > MaxFrameStep) {
@@ -183,6 +183,14 @@ void CodeEditor::RenderActivityBar(float WorkAreaHeight) {
     DrawActivityButton("##ActDebug", "Run & Debug (F5)", SidebarPanelDebug, DebugIcon);
     DrawActivityButton("##ActOutline", "Symbol Outline", SidebarPanelOutline, OutlineIcon);
 
+    float SettingsPosY = WorkAreaHeight - ButtonSize;
+
+    if (ImGui::GetCursorPosY() < SettingsPosY) {
+        ImGui::SetCursorPosY(SettingsPosY);
+    }
+
+    DrawActivityButton("##ActSettings", "Settings", SidebarPanelSettings, SettingsIcon);
+
     ImGui::PopStyleColor(ColorPushCount);
     ImGui::EndChild();
     ImGui::PopStyleVar(StylePushCount);
@@ -231,6 +239,8 @@ void CodeEditor::RenderSidebarPanel(float WorkAreaHeight) {
         RenderDebugSidebar();
     } else if (ActiveSidebarPanel == SidebarPanelOutline) {
         RenderOutlineSidebar();
+    } else if (ActiveSidebarPanel == SidebarPanelSettings) {
+        RenderSettingsSidebar();
     }
 
     ImGui::EndGroup();
@@ -745,4 +755,12 @@ void CodeEditor::RenderOutlineSidebar() {
     }
 
     ImGui::EndChild();
+}
+
+// Renders the Settings sidebar panel placeholder for user preferences.
+void CodeEditor::RenderSettingsSidebar() {
+    ImGui::Text("SETTINGS");
+    ImGui::Separator();
+    ImGui::Spacing();
+    ImGui::TextWrapped("Editor settings will appear here.");
 }

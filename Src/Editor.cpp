@@ -352,6 +352,13 @@ std::vector<PaletteCommand> CodeEditor::BuildPaletteCommands() {
         SidebarSlideProgress = ZeroFloat;
         RefreshOutlineSymbols();
     } });
+    Commands.push_back({ "View: Open Settings", "", [this]() {
+        const float ZeroFloat = 0;
+        IsZenMode = false;
+        ShowSidebar = true;
+        ActiveSidebarPanel = SidebarPanelSettings;
+        SidebarSlideProgress = ZeroFloat;
+    } });
     Commands.push_back({ "View: Toggle Sidebar", "", [this]() { ShowSidebar = !ShowSidebar; } });
     Commands.push_back({ "View: Toggle Terminal", "Ctrl+`", [this]() {
         if (!CurrentFolderPath.empty()) {
@@ -951,21 +958,23 @@ void CodeEditor::Initialize(GLFWwindow* WindowPointer) {
     AppWindow = WindowPointer;
 
     const int SingleOversample = 1;
+    static const ImWchar AsciiRanges[] = { 0x0020, 0x007E, 0 };
     ImFontConfig CompactFontCfg;
     CompactFontCfg.OversampleH = SingleOversample;
     CompactFontCfg.OversampleV = SingleOversample;
 
     ImGuiIO& Io = ImGui::GetIO();
-    MenuBarFont = Io.Fonts->AddFontFromFileTTF("Assets/Fonts/Poppins-Bold.ttf", static_cast<float>(FontSize), &CompactFontCfg);
-    RegularFont = Io.Fonts->AddFontFromFileTTF("Assets/Fonts/Poppins-Regular.ttf", static_cast<float>(FontSize), &CompactFontCfg);
+    Io.Fonts->Flags |= ImFontAtlasFlags_NoBakedLines;
+    MenuBarFont = Io.Fonts->AddFontFromFileTTF("Assets/Fonts/Poppins-Bold.ttf", static_cast<float>(FontSize), &CompactFontCfg, AsciiRanges);
+    RegularFont = Io.Fonts->AddFontFromFileTTF("Assets/Fonts/Poppins-Regular.ttf", static_cast<float>(FontSize), &CompactFontCfg, AsciiRanges);
 
     // Loads the monospace code font with system fallback.
     if (exists("Assets/Fonts/CascadiaMono.ttf")) {
-        CodeFont = Io.Fonts->AddFontFromFileTTF("Assets/Fonts/CascadiaMono.ttf", static_cast<float>(CodeFontSize), &CompactFontCfg);
+        CodeFont = Io.Fonts->AddFontFromFileTTF("Assets/Fonts/CascadiaMono.ttf", static_cast<float>(CodeFontSize), &CompactFontCfg, AsciiRanges);
     } else if (exists("C:/Windows/Fonts/CascadiaMono.ttf")) {
-        CodeFont = Io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/CascadiaMono.ttf", static_cast<float>(CodeFontSize), &CompactFontCfg);
+        CodeFont = Io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/CascadiaMono.ttf", static_cast<float>(CodeFontSize), &CompactFontCfg, AsciiRanges);
     } else if (exists("C:/Windows/Fonts/consola.ttf")) {
-        CodeFont = Io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/consola.ttf", static_cast<float>(CodeFontSize), &CompactFontCfg);
+        CodeFont = Io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/consola.ttf", static_cast<float>(CodeFontSize), &CompactFontCfg, AsciiRanges);
     } else {
         CodeFont = RegularFont;
     }
@@ -1017,6 +1026,7 @@ void CodeEditor::Initialize(GLFWwindow* WindowPointer) {
     GitIcon.LoadFromLucideApi("git-branch", "Assets/Icons/Git.svg");
     DebugIcon.LoadFromLucideApi("bug", "Assets/Icons/Debug.svg");
     OutlineIcon.LoadFromLucideApi("list-tree", "Assets/Icons/Outline.svg");
+    SettingsIcon.LoadFromLucideApi("settings", "Assets/Icons/Settings.svg");
 
     // Initializes the primary and secondary native Scintilla 5 + Lexilla 5 hosts.
     HWND OwnerHwnd = (AppWindow != nullptr) ? glfwGetWin32Window(AppWindow) : nullptr;
@@ -1051,6 +1061,10 @@ void CodeEditor::Initialize(GLFWwindow* WindowPointer) {
 
     CreateNewTab("Welcome.md", WelcomeContent, true);
     AddLog("Editor Initialized Successfully.");
+
+    // Trims temporary startup working set pages to keep memory usage minimal.
+    const SIZE_T TrimWorkingSetFlag = static_cast<SIZE_T>(-1);
+    SetProcessWorkingSetSize(GetCurrentProcess(), TrimWorkingSetFlag, TrimWorkingSetFlag);
 }
 
 // Creates a new editor tab backed by its own Scintilla document pointer and stable TabId.
@@ -3480,35 +3494,38 @@ void CodeEditor::Render() {
     ImGui::EndChild();
     ImGui::PopStyleVar();
 
-    // Renders Command Palette, Diff Viewer, Explorer Action Modal, Unsaved Changes Modal, and About Modal.
-    std::vector<QuickOpenEntry> QuickOpenFiles;
-    std::vector<QuickSymbolEntry> QuickSymbols;
-
+    // Renders Command Palette (lazily populated), Diff Viewer, Explorer Action Modal, Unsaved Changes Modal, and About Modal.
     if (Palette.IsOpen()) {
+        std::vector<QuickOpenEntry> QuickOpenFiles;
+        std::vector<QuickSymbolEntry> QuickSymbols;
         CollectQuickOpenFiles(WorkspaceRoot, "", QuickOpenFiles);
 
         for (const auto& Sym : CachedOutlineSymbols) {
             QuickSymbols.push_back({ Sym.Kind, Sym.Name, Sym.LineNumber });
         }
-    }
 
-    Palette.Render(
-        BuildPaletteCommands(),
-        QuickOpenFiles,
-        QuickSymbols,
-        [this](const std::string& FilePath) {
-            OpenFileFromDisk(FilePath);
-            EditorHost.Focus();
-        },
-        [this](int LineNum, int ColNum) {
-            EditorHost.GoToLineColumn(LineNum, ColNum);
-            EditorHost.Focus();
-        },
-        [this](int LineNum) {
-            EditorHost.GoToLine(LineNum);
-            EditorHost.Focus();
+        if (CachedPaletteCommands.empty()) {
+            CachedPaletteCommands = BuildPaletteCommands();
         }
-    );
+
+        Palette.Render(
+            CachedPaletteCommands,
+            QuickOpenFiles,
+            QuickSymbols,
+            [this](const std::string& FilePath) {
+                OpenFileFromDisk(FilePath);
+                EditorHost.Focus();
+            },
+            [this](int LineNum, int ColNum) {
+                EditorHost.GoToLineColumn(LineNum, ColNum);
+                EditorHost.Focus();
+            },
+            [this](int LineNum) {
+                EditorHost.GoToLine(LineNum);
+                EditorHost.Focus();
+            }
+        );
+    }
 
     DiffView.Render(CodeFont);
     RenderExplorerActionModal();

@@ -42,7 +42,8 @@ enum SidebarPanelMode {
     SidebarPanelSearch,
     SidebarPanelGit,
     SidebarPanelDebug,
-    SidebarPanelOutline
+    SidebarPanelOutline,
+    SidebarPanelSettings
 };
 
 // Identifies how split editor panes are arranged.
@@ -190,6 +191,8 @@ private:
     Icon GitIcon;
     Icon DebugIcon;
     Icon OutlineIcon;
+    Icon SettingsIcon;
+    std::vector<PaletteCommand> CachedPaletteCommands;
     TitleBarLayout CurrentTitleBarLayout;
     bool HasOpenMenuPopup;
     std::vector<TitleBarRect> OpenMenuPopupRects;
@@ -257,6 +260,7 @@ private:
     void RenderGitSidebar();
     void RenderDebugSidebar();
     void RenderOutlineSidebar();
+    void RenderSettingsSidebar();
     void RefreshOutlineSymbols();
     void BrowseDebugExecutable();
     void StartDebuggingSession();
@@ -647,6 +651,12 @@ private:
                         ActiveSidebarPanel = SidebarPanelOutline;
                         SidebarSlideProgress = ZeroVal;
                         RefreshOutlineSymbols();
+                    }
+                    if (ImGui::MenuItem("Settings")) {
+                        IsZenMode = false;
+                        ShowSidebar = true;
+                        ActiveSidebarPanel = SidebarPanelSettings;
+                        SidebarSlideProgress = ZeroVal;
                     }
 
                     ImGui::Separator();
@@ -1135,17 +1145,6 @@ public:
         CurrentTitleBarLayout.MenuItemsEndX = ZeroFloat;
         HasOpenMenuPopup = false;
         OpenMenuPopupRects.clear();
-
-        // Loads default Windows caption icons from disk and Activity Bar icons via the Lucide API.
-        MinimizeIcon.LoadFromFile("Assets/Icons/Minimize.svg");
-        MaximizeIcon.LoadFromFile("Assets/Icons/Maximize.svg");
-        RestoreIcon.LoadFromFile("Assets/Icons/Restore.svg");
-        CloseIcon.LoadFromFile("Assets/Icons/Close.svg");
-        ExplorerIcon.LoadFromLucideApi("files", "Assets/Icons/Explorer.svg");
-        SearchIcon.LoadFromLucideApi("search", "Assets/Icons/Search.svg");
-        GitIcon.LoadFromLucideApi("git-branch", "Assets/Icons/Git.svg");
-        DebugIcon.LoadFromLucideApi("bug", "Assets/Icons/Debug.svg");
-        OutlineIcon.LoadFromLucideApi("list-tree", "Assets/Icons/Outline.svg");
     }
 
     // Saves user configuration and cleans up terminals, debugger, LSP, and Scintilla resources.

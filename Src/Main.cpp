@@ -586,15 +586,28 @@ int main(int Argc, char** Argv) {
 
     if (Hwnd != nullptr) {
         ConfigureCustomFrame(Hwnd);
+
+        // Applies the embedded Vadex.ico resource to both taskbar and titlebar window icon slots.
+        const WORD AppIconResourceId = 101;
+        HICON AppIcon = LoadIconW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(AppIconResourceId));
+
+        if (AppIcon != nullptr) {
+            SendMessageW(Hwnd, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(AppIcon));
+            SendMessageW(Hwnd, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(AppIcon));
+        }
     }
 
     ImVec4 ClearColor = ImVec4(ClearRedGreen, ClearRedGreen, ClearBlue, FullAlpha);
     bool TileKeyPressed = false;
 
-    const double IdleWaitSeconds = 0.05;
+    const double IdleWaitSeconds = 0.1;
 
     while (!EditorApp.GetShouldExit()) {
         glfwWaitEventsTimeout(IdleWaitSeconds);
+
+        if (glfwGetWindowAttrib(Window, GLFW_ICONIFIED) != ZeroInt) {
+            continue;
+        }
 
         if (glfwWindowShouldClose(Window)) {
             if (EditorApp.HasUnsavedChanges()) {

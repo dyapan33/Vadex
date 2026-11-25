@@ -704,8 +704,12 @@ public:
         return ParseSvgString(SvgContent);
     }
 
-    // Loads a Lucide icon via the Lucide CDN API, caching it locally and falling back to disk if offline.
+    // Loads a Lucide icon from local disk cache first, fetching via the Lucide CDN API only if missing.
     bool LoadFromLucideApi(const std::string& LucideIconName, const std::string& LocalCachePath) {
+        if (!LocalCachePath.empty() && LoadFromFile(LocalCachePath)) {
+            return true;
+        }
+
         std::wstring WideIconName(LucideIconName.begin(), LucideIconName.end());
         std::wstring UnpkgPath = L"/lucide-static@latest/icons/" + WideIconName + L".svg";
         std::string SvgContent = FetchHttpsSvg(L"unpkg.com", UnpkgPath);
@@ -726,10 +730,6 @@ public:
             }
 
             return true;
-        }
-
-        if (!LocalCachePath.empty()) {
-            return LoadFromFile(LocalCachePath);
         }
 
         return false;
