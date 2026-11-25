@@ -42,8 +42,7 @@ enum SidebarPanelMode {
     SidebarPanelSearch,
     SidebarPanelGit,
     SidebarPanelDebug,
-    SidebarPanelOutline,
-    SidebarPanelSettings
+    SidebarPanelOutline
 };
 
 // Identifies how split editor panes are arranged.
@@ -223,6 +222,7 @@ private:
     int CachedMarkdownTabId;
     bool MarkdownDirty;
     bool ShowAboutModal;
+    bool ShowSettingsWindow;
     std::vector<NavigationLocation> NavHistory;
     int NavHistoryIndex;
     bool IsNavigatingHistory;
@@ -260,7 +260,7 @@ private:
     void RenderGitSidebar();
     void RenderDebugSidebar();
     void RenderOutlineSidebar();
-    void RenderSettingsSidebar();
+    void RenderSettingsWindow();
     void RefreshOutlineSymbols();
     void BrowseDebugExecutable();
     void StartDebuggingSession();
@@ -653,10 +653,7 @@ private:
                         RefreshOutlineSymbols();
                     }
                     if (ImGui::MenuItem("Settings")) {
-                        IsZenMode = false;
-                        ShowSidebar = true;
-                        ActiveSidebarPanel = SidebarPanelSettings;
-                        SidebarSlideProgress = ZeroVal;
+                        ShowSettingsWindow = true;
                     }
 
                     ImGui::Separator();
@@ -1126,6 +1123,7 @@ public:
         CachedMarkdownTabId = NegativeOneInt;
         MarkdownDirty = true;
         ShowAboutModal = false;
+        ShowSettingsWindow = false;
         NavHistoryIndex = NegativeOneInt;
         IsNavigatingHistory = false;
         LastEditLocation = { "", OneInt, OneInt };

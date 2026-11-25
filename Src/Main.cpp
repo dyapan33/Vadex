@@ -588,7 +588,7 @@ int main(int Argc, char** Argv) {
         ConfigureCustomFrame(Hwnd);
 
         // Applies the embedded Vadex.ico resource to both taskbar and titlebar window icon slots.
-        const WORD AppIconResourceId = 101;
+        const WORD AppIconResourceId = 1;
         HICON AppIcon = LoadIconW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(AppIconResourceId));
 
         if (AppIcon != nullptr) {

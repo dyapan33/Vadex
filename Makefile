@@ -8,7 +8,7 @@ SOURCES = Src/Main.cpp Src/Editor.cpp Src/EditorSidebar.cpp Src/ScintillaHost.cp
 OBJECTS = $(addprefix $(OBJDIR)/, $(notdir $(SOURCES:.cpp=.o))) $(OBJDIR)/VadexRes.o
 HEADERS = Include/Editor.hpp Include/Icon.hpp Include/Theme.hpp Include/ScintillaHost.hpp Include/EditorFeatures.hpp Include/Minimap.hpp Include/StickyScroll.hpp Include/CommandPalette.hpp Include/DiffViewer.hpp Include/LspClient.hpp Include/ConfigManager.hpp Include/WorkspaceSearch.hpp Include/GitManager.hpp Include/SymbolOutline.hpp Include/IntelliSense.hpp Include/DebuggerClient.hpp Include/MarkdownPreview.hpp
 
-TARGET = CodeEditor.exe
+TARGET = Vadex.exe
 
 vpath %.cpp Src ImGUI ImGUI/backends
 
@@ -18,9 +18,12 @@ $(TARGET): $(OBJECTS)
 	$(CXX) $(OBJECTS) -o $(TARGET) $(LDFLAGS)
 	rm -f Build/$(TARGET)
 	mv $(TARGET) Build/
-	cp GLFW/lib/glfw3.dll Build/
-	cp Scintilla/Bin/Scintilla.dll Build/
-	cp Lexilla/Bin/lexilla.dll Build/
+	test -f Build/glfw3.dll || cp GLFW/lib/glfw3.dll Build/
+	test -f Build/Scintilla.dll || cp Scintilla/Bin/Scintilla.dll Build/
+	test -f Build/lexilla.dll || cp Lexilla/Bin/lexilla.dll Build/
+	cp Welcome.md Build/
+	rm -rf Build/Assets
+	cp -r Assets Build/
 
 $(OBJDIR)/VadexRes.o: Assets/Vadex.rc Assets/Images/Vadex.ico | $(OBJDIR)
 	$(WINDRES) Assets/Vadex.rc -O coff -o $@

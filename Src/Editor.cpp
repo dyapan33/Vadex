@@ -353,11 +353,7 @@ std::vector<PaletteCommand> CodeEditor::BuildPaletteCommands() {
         RefreshOutlineSymbols();
     } });
     Commands.push_back({ "View: Open Settings", "", [this]() {
-        const float ZeroFloat = 0;
-        IsZenMode = false;
-        ShowSidebar = true;
-        ActiveSidebarPanel = SidebarPanelSettings;
-        SidebarSlideProgress = ZeroFloat;
+        ShowSettingsWindow = true;
     } });
     Commands.push_back({ "View: Toggle Sidebar", "", [this]() { ShowSidebar = !ShowSidebar; } });
     Commands.push_back({ "View: Toggle Terminal", "Ctrl+`", [this]() {
@@ -953,10 +949,21 @@ void CodeEditor::HandleNativeNotify(WPARAM WParam, LPARAM LParam) {
     }
 }
 
-// Initializes fonts, icons, primary and secondary Scintilla hosts, welcome tab, and initial logs.
+// Initializes fonts, icons, primary Scintilla host, welcome tab, and initial logs from the Build directory.
 void CodeEditor::Initialize(GLFWwindow* WindowPointer) {
     AppWindow = WindowPointer;
 
+    // Resolves the executable directory (Build/) so Vadex relies only on its own Assets folder.
+    const DWORD ZeroDword = 0;
+    char ExePathBuf[MaxFileSize] = {};
+
+    if (GetModuleFileNameA(nullptr, ExePathBuf, MaxFileSize) > ZeroDword) {
+        AppDataDir = path(ExePathBuf).parent_path().string();
+    } else {
+        AppDataDir = ".";
+    }
+
+    std::string AssetsDir = AppDataDir + "\\Assets";
     const int SingleOversample = 1;
     static const ImWchar AsciiRanges[] = { 0x0020, 0x007E, 0 };
     ImFontConfig CompactFontCfg;
@@ -965,28 +972,20 @@ void CodeEditor::Initialize(GLFWwindow* WindowPointer) {
 
     ImGuiIO& Io = ImGui::GetIO();
     Io.Fonts->Flags |= ImFontAtlasFlags_NoBakedLines;
-    MenuBarFont = Io.Fonts->AddFontFromFileTTF("Assets/Fonts/Poppins-Bold.ttf", static_cast<float>(FontSize), &CompactFontCfg, AsciiRanges);
-    RegularFont = Io.Fonts->AddFontFromFileTTF("Assets/Fonts/Poppins-Regular.ttf", static_cast<float>(FontSize), &CompactFontCfg, AsciiRanges);
+    MenuBarFont = Io.Fonts->AddFontFromFileTTF((AssetsDir + "\\Fonts\\Poppins-Bold.ttf").c_str(), static_cast<float>(FontSize), &CompactFontCfg, AsciiRanges);
+    RegularFont = Io.Fonts->AddFontFromFileTTF((AssetsDir + "\\Fonts\\Poppins-Regular.ttf").c_str(), static_cast<float>(FontSize), &CompactFontCfg, AsciiRanges);
 
-    // Loads the monospace code font with system fallback.
-    if (exists("Assets/Fonts/CascadiaMono.ttf")) {
-        CodeFont = Io.Fonts->AddFontFromFileTTF("Assets/Fonts/CascadiaMono.ttf", static_cast<float>(CodeFontSize), &CompactFontCfg, AsciiRanges);
+    // Loads the monospace code font from Build/Assets with system fallback.
+    std::string LocalMonoPath = AssetsDir + "\\Fonts\\CascadiaMono.ttf";
+
+    if (exists(LocalMonoPath)) {
+        CodeFont = Io.Fonts->AddFontFromFileTTF(LocalMonoPath.c_str(), static_cast<float>(CodeFontSize), &CompactFontCfg, AsciiRanges);
     } else if (exists("C:/Windows/Fonts/CascadiaMono.ttf")) {
         CodeFont = Io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/CascadiaMono.ttf", static_cast<float>(CodeFontSize), &CompactFontCfg, AsciiRanges);
     } else if (exists("C:/Windows/Fonts/consola.ttf")) {
         CodeFont = Io.Fonts->AddFontFromFileTTF("C:/Windows/Fonts/consola.ttf", static_cast<float>(CodeFontSize), &CompactFontCfg, AsciiRanges);
     } else {
         CodeFont = RegularFont;
-    }
-
-    // Resolves the executable directory so Vadex never stores config files in user workspaces.
-    const DWORD ZeroDword = 0;
-    char ExePathBuf[MaxFileSize] = {};
-
-    if (GetModuleFileNameA(nullptr, ExePathBuf, MaxFileSize) > ZeroDword) {
-        AppDataDir = path(ExePathBuf).parent_path().string();
-    } else {
-        AppDataDir = ".";
     }
 
     // Loads Segoe Fluent Icons / Segoe MDL2 Assets for native Windows caption icons.
@@ -1009,6 +1008,7 @@ void CodeEditor::Initialize(GLFWwindow* WindowPointer) {
     } else if (!UserConfig.RecentWorkspaces.empty()) {
         ConfigManager::SaveRecentWorkspacesFile(WorkspacesPath, UserConfig.RecentWorkspaces);
     }
+
     TabSize = UserConfig.TabSize;
     ShowMinimap = UserConfig.ShowMinimap;
     ShowStickyScroll = UserConfig.ShowStickyScroll;
@@ -1016,17 +1016,18 @@ void CodeEditor::Initialize(GLFWwindow* WindowPointer) {
     SidebarWidth = UserConfig.SidebarWidth;
     ConsoleHeight = UserConfig.ConsoleHeight;
 
-    // Loads default Windows caption icons from disk and Activity Bar icons via the Lucide API.
-    MinimizeIcon.LoadFromFile("Assets/Icons/Minimize.svg");
-    MaximizeIcon.LoadFromFile("Assets/Icons/Maximize.svg");
-    RestoreIcon.LoadFromFile("Assets/Icons/Restore.svg");
-    CloseIcon.LoadFromFile("Assets/Icons/Close.svg");
-    ExplorerIcon.LoadFromLucideApi("files", "Assets/Icons/Explorer.svg");
-    SearchIcon.LoadFromLucideApi("search", "Assets/Icons/Search.svg");
-    GitIcon.LoadFromLucideApi("git-branch", "Assets/Icons/Git.svg");
-    DebugIcon.LoadFromLucideApi("bug", "Assets/Icons/Debug.svg");
-    OutlineIcon.LoadFromLucideApi("list-tree", "Assets/Icons/Outline.svg");
-    SettingsIcon.LoadFromLucideApi("settings", "Assets/Icons/Settings.svg");
+    // Loads fallback caption icons and Activity Bar icons from Build/Assets/Icons.
+    std::string IconsDir = AssetsDir + "\\Icons";
+    MinimizeIcon.LoadFromFile(IconsDir + "\\Minimize.svg");
+    MaximizeIcon.LoadFromFile(IconsDir + "\\Maximize.svg");
+    RestoreIcon.LoadFromFile(IconsDir + "\\Restore.svg");
+    CloseIcon.LoadFromFile(IconsDir + "\\Close.svg");
+    ExplorerIcon.LoadFromLucideApi("files", IconsDir + "\\Explorer.svg");
+    SearchIcon.LoadFromLucideApi("search", IconsDir + "\\Search.svg");
+    GitIcon.LoadFromLucideApi("git-branch", IconsDir + "\\Git.svg");
+    DebugIcon.LoadFromLucideApi("bug", IconsDir + "\\Debug.svg");
+    OutlineIcon.LoadFromLucideApi("list-tree", IconsDir + "\\Outline.svg");
+    SettingsIcon.LoadFromLucideApi("settings", IconsDir + "\\Settings.svg");
 
     // Initializes the primary and secondary native Scintilla 5 + Lexilla 5 hosts.
     HWND OwnerHwnd = (AppWindow != nullptr) ? glfwGetWin32Window(AppWindow) : nullptr;
@@ -1048,9 +1049,9 @@ void CodeEditor::Initialize(GLFWwindow* WindowPointer) {
 
     // SecondaryEditorHost is initialized lazily only when a split editor is opened to save RAM and VRAM.
 
-    // Reads the entire welcome markdown file from disk into a string buffer.
+    // Reads the entire welcome markdown file from the Build directory into a string buffer.
     std::string WelcomeContent;
-    std::ifstream WelcomeFile("Welcome.md");
+    std::ifstream WelcomeFile(AppDataDir + "\\Welcome.md");
 
     if (WelcomeFile.is_open()) {
         std::stringstream WelcomeStream;
@@ -1851,7 +1852,7 @@ void CodeEditor::OpenWelcomeTab() {
     }
 
     std::string WelcomeContent;
-    std::ifstream WelcomeFile("Welcome.md");
+    std::ifstream WelcomeFile(AppDataDir + "\\Welcome.md");
 
     if (WelcomeFile.is_open()) {
         std::stringstream WelcomeStream;
@@ -3531,6 +3532,7 @@ void CodeEditor::Render() {
     RenderExplorerActionModal();
     RenderUnsavedChangesModal();
     RenderAboutModal();
+    RenderSettingsWindow();
 
     // Keeps Scintilla visible while punching exact cutout regions for ALL active ImGui popups, context menus, tooltips, and floating windows.
     bool AnyModalOpen = Palette.IsOpen() || DiffView.IsOpen() || ShowUnsavedModal || ShowAboutModal || (ActiveExplorerAction != ExplorerActionNone) || ShowTabSizeEditor;

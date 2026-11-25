@@ -122,7 +122,7 @@ void CodeEditor::RenderActivityBar(float WorkAreaHeight) {
         TargetButtonIndex = IndexOutline;
     }
 
-    float TargetY = (ActiveSidebarPanel == SidebarPanelSettings) ? (WorkAreaHeight - ButtonSize) : (static_cast<float>(TargetButtonIndex) * ButtonSize);
+    float TargetY = static_cast<float>(TargetButtonIndex) * ButtonSize;
     float DeltaTime = ImGui::GetIO().DeltaTime;
 
     if (DeltaTime > MaxFrameStep) {
@@ -189,7 +189,23 @@ void CodeEditor::RenderActivityBar(float WorkAreaHeight) {
         ImGui::SetCursorPosY(SettingsPosY);
     }
 
-    DrawActivityButton("##ActSettings", "Settings", SidebarPanelSettings, SettingsIcon);
+    if (ImGui::Button("##ActSettings", ImVec2(ButtonSize, ButtonSize))) {
+        ShowSettingsWindow = !ShowSettingsWindow;
+    }
+
+    ImVec2 SettingsMin = ImGui::GetItemRectMin();
+    ImVec2 SettingsMax = ImGui::GetItemRectMax();
+
+    if (ShowSettingsWindow) {
+        DrawList->AddRectFilled(SettingsMin, SettingsMax, ActivePillColor);
+        DrawList->AddRectFilled(SettingsMin, ImVec2(SettingsMin.x + AccentStripeWidth, SettingsMax.y), AccentStripeColor);
+    }
+
+    SettingsIcon.Draw(DrawList, SettingsMin, SettingsMax, ShowSettingsWindow ? ActiveIconColor : InactiveIconColor, IconStroke, IconDrawSize);
+
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Settings");
+    }
 
     ImGui::PopStyleColor(ColorPushCount);
     ImGui::EndChild();
@@ -239,8 +255,6 @@ void CodeEditor::RenderSidebarPanel(float WorkAreaHeight) {
         RenderDebugSidebar();
     } else if (ActiveSidebarPanel == SidebarPanelOutline) {
         RenderOutlineSidebar();
-    } else if (ActiveSidebarPanel == SidebarPanelSettings) {
-        RenderSettingsSidebar();
     }
 
     ImGui::EndGroup();
@@ -757,10 +771,27 @@ void CodeEditor::RenderOutlineSidebar() {
     ImGui::EndChild();
 }
 
-// Renders the Settings sidebar panel placeholder for user preferences.
-void CodeEditor::RenderSettingsSidebar() {
-    ImGui::Text("SETTINGS");
-    ImGui::Separator();
-    ImGui::Spacing();
-    ImGui::TextWrapped("Editor settings will appear here.");
+// Renders the Settings floating mini window for user preferences.
+void CodeEditor::RenderSettingsWindow() {
+    const float HalfFloat = 0.5f;
+    const float DefaultWidth = 450;
+    const float DefaultHeight = 350;
+
+    if (!ShowSettingsWindow) {
+        return;
+    }
+
+    ImGuiIO& IoRef = ImGui::GetIO();
+    ImVec2 CenterPos(IoRef.DisplaySize.x * HalfFloat, IoRef.DisplaySize.y * HalfFloat);
+    ImGui::SetNextWindowPos(CenterPos, ImGuiCond_FirstUseEver, ImVec2(HalfFloat, HalfFloat));
+    ImGui::SetNextWindowSize(ImVec2(DefaultWidth, DefaultHeight), ImGuiCond_FirstUseEver);
+
+    if (ImGui::Begin("Settings", &ShowSettingsWindow, ImGuiWindowFlags_NoCollapse)) {
+        ImGui::Text("SETTINGS");
+        ImGui::Separator();
+        ImGui::Spacing();
+        ImGui::TextWrapped("Editor settings will appear here.");
+    }
+
+    ImGui::End();
 }
