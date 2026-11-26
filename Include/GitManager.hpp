@@ -179,6 +179,41 @@ public:
         Refresh(WorkspacePath);
     }
 
+    // Discards working-tree and staged changes for a single file (or deletes it if untracked).
+    std::string DiscardFile(const std::string& WorkspacePath, const std::string& RelativePath, bool IsUntracked) {
+        std::string Result;
+
+        if (IsUntracked) {
+            std::error_code Err;
+            std::filesystem::path FullTarget = std::filesystem::path(WorkspacePath) / RelativePath;
+            std::filesystem::remove_all(FullTarget, Err);
+            Result = Err ? ("Failed to discard untracked file: " + Err.message()) : ("Discarded untracked file: " + RelativePath);
+        } else {
+            RunGit(WorkspacePath, "reset HEAD -- \"" + RelativePath + "\"");
+            Result = RunGit(WorkspacePath, "checkout -- \"" + RelativePath + "\"");
+
+            if (Result.empty()) {
+                Result = "Discarded changes: " + RelativePath;
+            }
+        }
+
+        Refresh(WorkspacePath);
+        LastStatusMessage = Result;
+
+        return LastStatusMessage;
+    }
+
+    // Discards all uncommitted changes across the entire workspace repository.
+    std::string DiscardAllChanges(const std::string& WorkspacePath) {
+        RunGit(WorkspacePath, "reset HEAD");
+        std::string CheckoutOut = RunGit(WorkspacePath, "checkout -- .");
+        std::string CleanOut = RunGit(WorkspacePath, "clean -fd");
+        Refresh(WorkspacePath);
+        LastStatusMessage = (CheckoutOut.empty() && CleanOut.empty()) ? "Discarded all changes." : (CheckoutOut + CleanOut);
+
+        return LastStatusMessage;
+    }
+
     // Commits staged changes (auto-staging all changes if none are staged yet).
     std::string Commit(const std::string& WorkspacePath, const std::string& Message) {
         if (Message.empty()) {

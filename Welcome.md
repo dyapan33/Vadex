@@ -1,4 +1,4 @@
 # Welcome to Vadex
+Editing but better. Vadex is a fast, native C++ code editor that respects system resources.
 
-We hope you enjoy your time using the editor, but you really have to open a folder. To do that, click on the Vadex logo, click File, and then click Open Folder.
 

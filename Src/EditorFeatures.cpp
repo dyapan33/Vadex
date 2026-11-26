@@ -355,6 +355,93 @@ bool EditorFeatures::HandleTabSnippet(ScintillaHost& Host, const std::string& Fi
     return true;
 }
 
+// Inserts standard HTML5 boilerplate at the caret and positions the cursor inside the body tag.
+void EditorFeatures::InsertHtmlBoilerplate(ScintillaHost& Host) {
+    if (!Host.IsReady()) {
+        return;
+    }
+
+    const std::string Boilerplate =
+        "<!DOCTYPE html>\n"
+        "<html lang=\"en\">\n"
+        "<head>\n"
+        "    <meta charset=\"UTF-8\">\n"
+        "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
+        "    <title>Document</title>\n"
+        "</head>\n"
+        "<body>\n"
+        "    \n"
+        "</body>\n"
+        "</html>\n";
+    const std::string BodyMarker = "<body>\n    ";
+
+    int SelStart = static_cast<int>(Host.Call(SCI_GETSELECTIONSTART));
+    int SelEnd = static_cast<int>(Host.Call(SCI_GETSELECTIONEND));
+
+    Host.Call(SCI_BEGINUNDOACTION);
+    Host.Call(SCI_SETTARGETSTART, static_cast<uptr_t>(SelStart));
+    Host.Call(SCI_SETTARGETEND, static_cast<uptr_t>(SelEnd));
+    Host.Call(SCI_REPLACETARGET, static_cast<uptr_t>(Boilerplate.size()), reinterpret_cast<sptr_t>(Boilerplate.c_str()));
+
+    size_t BodyOffset = Boilerplate.find(BodyMarker);
+
+    if (BodyOffset != std::string::npos) {
+        int CaretTarget = SelStart + static_cast<int>(BodyOffset + BodyMarker.size());
+        Host.Call(SCI_GOTOPOS, static_cast<uptr_t>(CaretTarget));
+        Host.Call(SCI_SCROLLCARET);
+    }
+
+    Host.Call(SCI_ENDUNDOACTION);
+}
+
+// Expands '!' followed by Enter into HTML5 boilerplate when editing an HTML file.
+bool EditorFeatures::HandleEnterEmmet(ScintillaHost& Host, const std::string& FileName) {
+    if (!Host.IsReady()) {
+        return false;
+    }
+
+    size_t DotPos = FileName.find_last_of('.');
+
+    if (DotPos == std::string::npos) {
+        return false;
+    }
+
+    std::string Ext = FileName.substr(DotPos);
+    std::transform(Ext.begin(), Ext.end(), Ext.begin(), [](unsigned char Ch) {
+        return static_cast<char>(std::tolower(Ch));
+    });
+
+    if (Ext != ".html" && Ext != ".htm") {
+        return false;
+    }
+
+    int SelStart = static_cast<int>(Host.Call(SCI_GETSELECTIONSTART));
+    int SelEnd = static_cast<int>(Host.Call(SCI_GETSELECTIONEND));
+
+    if (SelStart != SelEnd || SelStart < OneVal) {
+        return false;
+    }
+
+    char PrevChar = static_cast<char>(Host.Call(SCI_GETCHARAT, static_cast<uptr_t>(SelStart - OneVal)));
+
+    if (PrevChar != '!') {
+        return false;
+    }
+
+    if (SelStart >= TwoVal) {
+        char BeforeBang = static_cast<char>(Host.Call(SCI_GETCHARAT, static_cast<uptr_t>(SelStart - TwoVal)));
+
+        if (BeforeBang != ' ' && BeforeBang != '\t' && BeforeBang != '\n' && BeforeBang != '\r') {
+            return false;
+        }
+    }
+
+    Host.Call(SCI_SETSEL, static_cast<uptr_t>(SelStart - OneVal), static_cast<sptr_t>(SelStart));
+    InsertHtmlBoilerplate(Host);
+
+    return true;
+}
+
 // Exits active snippet tab-stop mode when Escape is pressed.
 bool EditorFeatures::HandleEscapeSnippet(ScintillaHost& Host) {
     if (!IsSnippetActive) {

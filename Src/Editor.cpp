@@ -156,11 +156,35 @@ std::string CodeEditor::DetectLspLanguageId(const std::string& FileName) {
     if (Ext == ".py") {
         return "python";
     }
-    if (Ext == ".js" || Ext == ".jsx") {
+    if (Ext == ".js" || Ext == ".jsx" || Ext == ".mjs") {
         return "javascript";
     }
     if (Ext == ".ts" || Ext == ".tsx") {
         return "typescript";
+    }
+    if (Ext == ".html" || Ext == ".htm") {
+        return "html";
+    }
+    if (Ext == ".css" || Ext == ".scss" || Ext == ".less") {
+        return "css";
+    }
+    if (Ext == ".json") {
+        return "json";
+    }
+    if (Ext == ".rs") {
+        return "rust";
+    }
+    if (Ext == ".go") {
+        return "go";
+    }
+    if (Ext == ".java") {
+        return "java";
+    }
+    if (Ext == ".cs") {
+        return "csharp";
+    }
+    if (Ext == ".lua") {
+        return "lua";
     }
 
     return "plaintext";
@@ -210,7 +234,11 @@ std::vector<PaletteCommand> CodeEditor::BuildPaletteCommands() {
 
     // File commands.
     Commands.push_back({ "File: New Text File", "Ctrl+N", [this]() { CreateNewTextFile(); } });
-    Commands.push_back({ "File: New Code File", "", [this]() { CreateNewTab("Untitled.cpp", "// New Code File\n"); } });
+    Commands.push_back({ "File: New Code File", "", [this]() { CreateNewCodeFile(); } });
+    Commands.push_back({ "HTML: Insert Boilerplate", "! + Enter", [this]() {
+        FeatureLayer.InsertHtmlBoilerplate(EditorHost);
+        EditorHost.Focus();
+    } });
     Commands.push_back({ "File: New Window", "Ctrl+Shift+N", [this]() { LaunchNewWindow(); } });
     Commands.push_back({ "File: Open File", "Ctrl+O", [this]() { OpenFileWithDialog(); } });
     Commands.push_back({ "File: Open Folder", "Ctrl+Shift+O", [this]() { OpenFolderWithDialog(); } });
@@ -444,6 +472,7 @@ std::vector<PaletteCommand> CodeEditor::BuildPaletteCommands() {
     Commands.push_back({ "Window: Tile Bottom-Left Quarter", "", [this]() { TileWindow(TileBottomLeftQuarter); } });
     Commands.push_back({ "Window: Tile Bottom-Right Quarter", "", [this]() { TileWindow(TileBottomRightQuarter); } });
     Commands.push_back({ "Help: Welcome (Welcome.md)", "", [this]() { OpenWelcomeTab(); } });
+    Commands.push_back({ "Help: Check for Updates", "", [this]() { OpenUpdatesPage(); } });
     Commands.push_back({ "Help: About Vadex", "", [this]() { ShowAboutModal = true; } });
 
     return Commands;
@@ -514,6 +543,13 @@ void CodeEditor::SyncActiveTabDocument() {
     }
 
     FileTab& ActiveTab = OpenTabs[ActiveTabIndex];
+
+    if (ActiveTab.IsImage) {
+        ImgViewer.LoadImage(ActiveTab.FilePath);
+        LastSyncedTabIndex = ActiveTabIndex;
+
+        return;
+    }
 
     if (ActiveTab.ScintillaDoc == ZeroSptr) {
         ActiveTab.ScintillaDoc = EditorHost.CreateDocument(ActiveTab.Content);
@@ -828,6 +864,13 @@ bool CodeEditor::HandleEditorKeyDown(UINT Msg, WPARAM WParam, LPARAM LParam) {
 
         return true;
     }
+    if (!IsCtrl && !IsAlt && !IsShift && WParam == VK_RETURN) {
+        if (ActiveTabIndex >= ZeroIndex && ActiveTabIndex < static_cast<int>(OpenTabs.size())) {
+            if (FeatureLayer.HandleEnterEmmet(EditorHost, OpenTabs[ActiveTabIndex].FileName)) {
+                return true;
+            }
+        }
+    }
     if (!IsCtrl && !IsAlt && WParam == VK_TAB) {
         if (ActiveTabIndex >= ZeroIndex && ActiveTabIndex < static_cast<int>(OpenTabs.size())) {
             return FeatureLayer.HandleTabSnippet(EditorHost, OpenTabs[ActiveTabIndex].FileName);
@@ -882,8 +925,8 @@ void CodeEditor::HandleNativeNotify(WPARAM WParam, LPARAM LParam) {
         if (ActiveTabIndex >= ZeroIndex && ActiveTabIndex < static_cast<int>(OpenTabs.size())) {
             char Typed = static_cast<char>(Notify->ch);
 
-            if (std::isalnum(static_cast<unsigned char>(Typed)) != ZeroIndex || Typed == '_') {
-                IntelliSenseEngine::TriggerAutoComplete(EditorHost, OpenTabs[ActiveTabIndex].FileName, false);
+            if (std::isalnum(static_cast<unsigned char>(Typed)) != ZeroIndex || Typed == '_' || Typed == '<' || Typed == '-') {
+                IntelliSenseEngine::TriggerAutoComplete(EditorHost, OpenTabs[ActiveTabIndex].FileName, Typed == '<');
             } else if (Typed == '(') {
                 IntelliSenseEngine::TriggerSignatureCallTip(EditorHost);
             } else if (Typed == '.' || Typed == ':') {
@@ -1036,6 +1079,9 @@ void CodeEditor::Initialize(GLFWwindow* WindowPointer) {
         EditorHost.SetKeyDownHandler([this](UINT Msg, WPARAM WParam, LPARAM LParam) {
             return HandleEditorKeyDown(Msg, WParam, LParam);
         });
+        EditorHost.SetCtrlClickHandler([this]() {
+            GoToDefinitionOrFallback();
+        });
         EditorHost.SetZoomLevel(UserConfig.ZoomLevel);
 
         if (UserConfig.WordWrap) {
@@ -1081,6 +1127,7 @@ void CodeEditor::CreateNewTab(const std::string& Name, const std::string& Conten
     Tab.Content = (Tab.ScintillaDoc == ZeroSptr) ? Content : "";
     Tab.IsModified = false;
     Tab.IsReadOnly = ReadOnly;
+    Tab.IsImage = false;
     Tab.CursorLine = OneOffset;
     Tab.CursorColumn = OneOffset;
 
@@ -1105,6 +1152,22 @@ void CodeEditor::TryStartLspForFile(const std::string& FilePath) {
         ServerCmd = "pyright-langserver --stdio";
     } else if (LangId == "javascript" || LangId == "typescript") {
         ServerCmd = "typescript-language-server --stdio";
+    } else if (LangId == "html") {
+        ServerCmd = "vscode-html-language-server --stdio";
+    } else if (LangId == "css") {
+        ServerCmd = "vscode-css-language-server --stdio";
+    } else if (LangId == "json") {
+        ServerCmd = "vscode-json-language-server --stdio";
+    } else if (LangId == "rust") {
+        ServerCmd = "rust-analyzer";
+    } else if (LangId == "go") {
+        ServerCmd = "gopls";
+    } else if (LangId == "java") {
+        ServerCmd = "jdtls";
+    } else if (LangId == "csharp") {
+        ServerCmd = "omnisharp -lsp";
+    } else if (LangId == "lua") {
+        ServerCmd = "lua-language-server";
     }
 
     if (!ServerCmd.empty() && Lsp.StartForWorkspace(ServerCmd, CurrentFolderPath)) {
@@ -1118,6 +1181,44 @@ void CodeEditor::OpenFileFromDisk(const std::string& Path) {
     const int OneOffset = 1;
     const int NegativeOneInt = -1;
 
+    path NormalizedTarget = path(Path).lexically_normal();
+
+    for (size_t Index = StartIndex; Index < OpenTabs.size(); ++Index) {
+        if (path(OpenTabs[Index].FilePath).lexically_normal() == NormalizedTarget) {
+            ActiveTabIndex = static_cast<int>(Index);
+            PendingSelectTabId = OpenTabs[Index].TabId;
+            SyncActiveTabDocument();
+            AddLog("Switched to existing tab: " + Path);
+
+            return;
+        }
+    }
+
+    path PathObj(Path);
+    std::string FileNameOnly = PathObj.filename().string();
+
+    if (ImageViewer::IsImageFile(FileNameOnly) && exists(PathObj)) {
+        FileTab Tab;
+        Tab.TabId = NextTabId++;
+        Tab.FilePath = Path;
+        Tab.FileName = FileNameOnly;
+        Tab.Content = "";
+        Tab.ScintillaDoc = ZeroSptr;
+        Tab.IsModified = false;
+        Tab.IsReadOnly = true;
+        Tab.IsImage = true;
+        Tab.CursorLine = OneOffset;
+        Tab.CursorColumn = OneOffset;
+
+        OpenTabs.push_back(Tab);
+        ActiveTabIndex = static_cast<int>(OpenTabs.size()) - OneOffset;
+        LastSyncedTabIndex = NegativeOneInt;
+        SyncActiveTabDocument();
+        AddLog("Opened image: " + Path);
+
+        return;
+    }
+
     std::ifstream FileStream(Path);
 
     if (FileStream.is_open()) {
@@ -1126,28 +1227,15 @@ void CodeEditor::OpenFileFromDisk(const std::string& Path) {
         std::string FileContents = StringStream.str();
         FileStream.close();
 
-        path NormalizedTarget = path(Path).lexically_normal();
-
-        for (size_t Index = StartIndex; Index < OpenTabs.size(); ++Index) {
-            if (path(OpenTabs[Index].FilePath).lexically_normal() == NormalizedTarget) {
-                ActiveTabIndex = static_cast<int>(Index);
-                PendingSelectTabId = OpenTabs[Index].TabId;
-                SyncActiveTabDocument();
-                AddLog("Switched to existing tab: " + Path);
-
-                return;
-            }
-        }
-
         FileTab Tab;
         Tab.TabId = NextTabId++;
         Tab.FilePath = Path;
-        path PathObj(Path);
-        Tab.FileName = PathObj.filename().string();
+        Tab.FileName = FileNameOnly;
         Tab.ScintillaDoc = EditorHost.CreateDocument(FileContents);
         Tab.Content = (Tab.ScintillaDoc == ZeroSptr) ? FileContents : "";
         Tab.IsModified = false;
         Tab.IsReadOnly = false;
+        Tab.IsImage = false;
         Tab.CursorLine = OneOffset;
         Tab.CursorColumn = OneOffset;
 
@@ -1829,10 +1917,49 @@ void CodeEditor::LaunchNewWindow() {
     }
 }
 
-// Creates a new untitled plain-text file tab.
+// Creates a new untitled plain-text file inside the active workspace folder.
 void CodeEditor::CreateNewTextFile() {
-    std::string Name = "Untitled-" + std::to_string(NextUntitledIndex++) + ".txt";
-    CreateNewTab(Name, "", false);
+    if (CurrentFolderPath.empty()) {
+        return;
+    }
+
+    path CandidatePath;
+
+    do {
+        std::string Name = "Untitled-" + std::to_string(NextUntitledIndex++) + ".txt";
+        CandidatePath = path(CurrentFolderPath) / Name;
+    } while (exists(CandidatePath));
+
+    std::ofstream CreatedFile(CandidatePath);
+
+    if (CreatedFile.is_open()) {
+        CreatedFile.close();
+        RefreshWorkspace();
+        OpenFileFromDisk(CandidatePath.string());
+    }
+}
+
+// Creates a new untitled C++ code file inside the active workspace folder.
+void CodeEditor::CreateNewCodeFile() {
+    if (CurrentFolderPath.empty()) {
+        return;
+    }
+
+    path CandidatePath;
+
+    do {
+        std::string Name = "Untitled-" + std::to_string(NextUntitledIndex++) + ".cpp";
+        CandidatePath = path(CurrentFolderPath) / Name;
+    } while (exists(CandidatePath));
+
+    std::ofstream CreatedFile(CandidatePath);
+
+    if (CreatedFile.is_open()) {
+        CreatedFile << "// New Code File\n";
+        CreatedFile.close();
+        RefreshWorkspace();
+        OpenFileFromDisk(CandidatePath.string());
+    }
 }
 
 // Opens Welcome.md in a tab (or focuses it if already open) with Markdown split preview enabled.
@@ -1862,6 +1989,78 @@ void CodeEditor::OpenWelcomeTab() {
     }
 
     CreateNewTab("Welcome.md", WelcomeContent, true);
+}
+
+// Opens the local Build/Updates/Index.html page in the default web browser.
+void CodeEditor::OpenUpdatesPage() {
+    std::string UpdatesPath = AppDataDir + "\\Updates\\Index.html";
+
+    if (!exists(UpdatesPath)) {
+        AddLog("Updates page not found: " + UpdatesPath);
+
+        return;
+    }
+
+    ShellExecuteA(nullptr, "open", UpdatesPath.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    AddLog("Opened Updates page: " + UpdatesPath);
+}
+
+// Reloads an open editor tab from disk (or closes it if removed after a Git discard).
+void CodeEditor::ReloadOpenTabFromDisk(const std::string& FilePath) {
+    const int ZeroInt = 0;
+
+    if (FilePath.empty()) {
+        return;
+    }
+
+    path TargetNorm = path(FilePath).lexically_normal();
+
+    for (int Idx = ZeroInt; Idx < static_cast<int>(OpenTabs.size()); ++Idx) {
+        if (path(OpenTabs[static_cast<size_t>(Idx)].FilePath).lexically_normal() != TargetNorm) {
+            continue;
+        }
+
+        if (!exists(TargetNorm)) {
+            CloseTabImmediate(Idx);
+
+            return;
+        }
+
+        if (OpenTabs[static_cast<size_t>(Idx)].IsImage) {
+            if (Idx == ActiveTabIndex) {
+                ImgViewer.ReleaseTexture();
+                ImgViewer.LoadImage(FilePath);
+            }
+
+            return;
+        }
+
+        std::ifstream FileStream(FilePath);
+
+        if (!FileStream.is_open()) {
+            return;
+        }
+
+        std::stringstream Stream;
+        Stream << FileStream.rdbuf();
+        std::string DiskText = Stream.str();
+        FileStream.close();
+
+        FileTab& Tab = OpenTabs[static_cast<size_t>(Idx)];
+
+        if (Idx == ActiveTabIndex && EditorHost.IsReady()) {
+            EditorHost.SetText(DiskText);
+            EditorHost.SetSavePoint();
+        } else if (EditorHost.IsReady()) {
+            EditorHost.ReleaseDocument(Tab.ScintillaDoc);
+            Tab.ScintillaDoc = EditorHost.CreateDocument(DiskText);
+        }
+
+        Tab.IsModified = false;
+        MarkdownDirty = true;
+
+        return;
+    }
 }
 
 // Renders the About Vadex modal dialog.
@@ -2054,12 +2253,16 @@ std::string CodeEditor::GetWordUnderCaret() const {
     return Word;
 }
 
-// Searches local outline symbols and workspace files as a fallback when LSP is unavailable.
+// Searches local outline symbols, variable declarations in the active file, and workspace files as a fallback when LSP is unavailable.
 void CodeEditor::JumpToWorkspaceSymbol(const std::string& SymbolName, const std::string& PreferKind) {
+    const int ZeroInt = 0;
+    const int OneInt = 1;
+
     if (SymbolName.empty()) {
         return;
     }
 
+    int CurrentLine = EditorHost.GetCurrentLine();
     RefreshOutlineSymbols();
 
     for (const auto& Sym : CachedOutlineSymbols) {
@@ -2070,6 +2273,67 @@ void CodeEditor::JumpToWorkspaceSymbol(const std::string& SymbolName, const std:
 
                 return;
             }
+        }
+    }
+
+    // Scans the active file for local variable, parameter, or constant definitions matching SymbolName.
+    if (EditorHost.IsReady() && PreferKind.empty()) {
+        int TotalLines = EditorHost.GetLineCount();
+        int FallbackMatchLine = ZeroInt;
+
+        auto IsIdentChar = [](char Ch) {
+            const int ZeroFlag = 0;
+
+            return (std::isalnum(static_cast<unsigned char>(Ch)) != ZeroFlag || Ch == '_');
+        };
+
+        for (int LineIdx = ZeroInt; LineIdx < TotalLines; ++LineIdx) {
+            int OneBased = LineIdx + OneInt;
+
+            if (OneBased == CurrentLine) {
+                continue;
+            }
+
+            std::string LineText = EditorHost.GetLineText(LineIdx);
+            size_t FoundPos = LineText.find(SymbolName);
+
+            while (FoundPos != std::string::npos) {
+                bool LeftBound = (FoundPos == static_cast<size_t>(ZeroInt) || !IsIdentChar(LineText[FoundPos - static_cast<size_t>(OneInt)]));
+                size_t AfterPos = FoundPos + SymbolName.size();
+                bool RightBound = (AfterPos >= LineText.size() || !IsIdentChar(LineText[AfterPos]));
+
+                if (LeftBound && RightBound) {
+                    std::string Before = LineText.substr(static_cast<size_t>(ZeroInt), FoundPos);
+                    std::string After = LineText.substr(AfterPos);
+                    size_t TrimBefore = Before.find_first_not_of(" \t");
+                    bool IsComment = (TrimBefore != std::string::npos && Before.compare(TrimBefore, static_cast<size_t>(OneInt + OneInt), "//") == ZeroInt);
+
+                    if (!IsComment) {
+                        bool HasDeclPrefix = (Before.find("const ") != std::string::npos || Before.find("int ") != std::string::npos || Before.find("float ") != std::string::npos || Before.find("double ") != std::string::npos || Before.find("bool ") != std::string::npos || Before.find("char ") != std::string::npos || Before.find("auto ") != std::string::npos || Before.find("std::") != std::string::npos || Before.find("size_t ") != std::string::npos || Before.find("let ") != std::string::npos || Before.find("var ") != std::string::npos || Before.find("class ") != std::string::npos || Before.find("struct ") != std::string::npos || Before.find("enum ") != std::string::npos || Before.find("def ") != std::string::npos || Before.find("function ") != std::string::npos || Before.find("void ") != std::string::npos || Before.find('*') != std::string::npos || Before.find('&') != std::string::npos);
+                        bool HasAssignOrSemi = (After.find('=') != std::string::npos || After.find(';') != std::string::npos || After.find('[') != std::string::npos || After.find('(') != std::string::npos);
+
+                        if (HasDeclPrefix && HasAssignOrSemi) {
+                            EditorHost.GoToLine(OneBased);
+                            EditorHost.Focus();
+
+                            return;
+                        }
+
+                        if (FallbackMatchLine == ZeroInt && OneBased < CurrentLine) {
+                            FallbackMatchLine = OneBased;
+                        }
+                    }
+                }
+
+                FoundPos = LineText.find(SymbolName, FoundPos + static_cast<size_t>(OneInt));
+            }
+        }
+
+        if (FallbackMatchLine > ZeroInt) {
+            EditorHost.GoToLine(FallbackMatchLine);
+            EditorHost.Focus();
+
+            return;
         }
     }
 
@@ -3086,9 +3350,12 @@ void CodeEditor::Render() {
                 SyncActiveTabDocument();
 
                 ImVec2 AvailEditorRegion = ImGui::GetContentRegionAvail();
-                bool IsMarkdownSplit = (!IsSplitEditorOpen && ShowMarkdownPreview && MarkdownPreview::IsMarkdownFile(Tab.FileName));
+                bool IsMarkdownSplit = (!Tab.IsImage && !IsSplitEditorOpen && ShowMarkdownPreview && MarkdownPreview::IsMarkdownFile(Tab.FileName));
 
-                if (IsSplitEditorOpen) {
+                if (Tab.IsImage) {
+                    ImgViewer.Render(AvailEditorRegion.x, AvailEditorRegion.y);
+                    HasVisibleEditorBounds = false;
+                } else if (IsSplitEditorOpen) {
                     if (CurrentLayoutMode == LayoutTwoRows) {
                         float HalfPaneHeight = (AvailEditorRegion.y - SplitDividerWidth) * HalfFloat;
 
@@ -3535,7 +3802,7 @@ void CodeEditor::Render() {
     RenderSettingsWindow();
 
     // Keeps Scintilla visible while punching exact cutout regions for ALL active ImGui popups, context menus, tooltips, and floating windows.
-    bool AnyModalOpen = Palette.IsOpen() || DiffView.IsOpen() || ShowUnsavedModal || ShowAboutModal || (ActiveExplorerAction != ExplorerActionNone) || ShowTabSizeEditor;
+    bool AnyModalOpen = Palette.IsOpen() || DiffView.IsOpen() || ShowUnsavedModal || ShowAboutModal || ShowDiscardAllGitModal || (ActiveExplorerAction != ExplorerActionNone) || ShowTabSizeEditor;
     std::vector<RECT> EmptyCutouts;
     std::vector<RECT> MenuCutouts;
     ImGuiContext* GuiCtx = ImGui::GetCurrentContext();

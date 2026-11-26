@@ -45,6 +45,7 @@ private:
     bool HasClipExclude;
     std::vector<RECT> LastClipExcludes;
     std::function<bool(UINT, WPARAM, LPARAM)> KeyDownHandler;
+    std::function<void()> CtrlClickHandler;
 
     static LRESULT CALLBACK EditorSubclassProc(HWND Hwnd, UINT Msg, WPARAM WParam, LPARAM LParam);
     void ApplyBaseDarkTheme();
@@ -66,6 +67,7 @@ public:
     sptr_t Call(unsigned int Message, uptr_t WParam = ZeroUptr, sptr_t LParam = ZeroSptr) const;
 
     void SetKeyDownHandler(std::function<bool(UINT, WPARAM, LPARAM)> Handler);
+    void SetCtrlClickHandler(std::function<void()> Handler);
     void SetBounds(int Left, int Top, int Width, int Height);
     void SetClipExcludeRects(const std::vector<RECT>& ExcludeRects);
     void SetVisible(bool Visible);

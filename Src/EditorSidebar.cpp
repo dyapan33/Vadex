@@ -64,6 +64,9 @@ void CodeEditor::GetFileBadge(const std::string& FileName, std::string& OutTag, 
     } else if (Ext == ".md") {
         OutTag = "MD";
         OutColor = ImVec4(MdRed, MdGreen, MdBlue, FullAlpha);
+    } else if (ImageViewer::IsImageFile(FileName)) {
+        OutTag = "IMG";
+        OutColor = ImVec4(HeaderRed, HeaderGreen, HeaderBlue, FullAlpha);
     } else if (FileName == "Makefile" || FileName == "makefile") {
         OutTag = "MK";
         OutColor = ImVec4(WebRed, WebGreen, WebBlue, FullAlpha);
@@ -275,6 +278,30 @@ void CodeEditor::RenderExplorerSidebar() {
     }
 
     ImGui::TextUnformatted(WorkspaceRoot.Name.c_str());
+    ImGui::SameLine();
+
+    if (ImGui::SmallButton("+##RootAddBtn")) {
+        ImGui::OpenPopup("RootAddMenu");
+    }
+
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("New File or Folder");
+    }
+
+    if (ImGui::BeginPopup("RootAddMenu")) {
+        if (ImGui::MenuItem("New File")) {
+            ActiveExplorerAction = ExplorerActionNewFile;
+            ExplorerActionTargetPath = CurrentFolderPath;
+            ExplorerInputBuffer[ZeroInt] = '\0';
+        }
+        if (ImGui::MenuItem("New Folder")) {
+            ActiveExplorerAction = ExplorerActionNewFolder;
+            ExplorerActionTargetPath = CurrentFolderPath;
+            ExplorerInputBuffer[ZeroInt] = '\0';
+        }
+        ImGui::EndPopup();
+    }
+
     ImGui::Separator();
 
     if (WorkspaceRoot.Children.empty()) {
@@ -442,6 +469,51 @@ void CodeEditor::RenderGitSidebar() {
         AddLog("Git Push: " + Out);
     }
 
+    if (!Git.GetChangedFiles().empty()) {
+        if (ImGui::Button("Discard All Changes", ImVec2(FullWidth, ZeroFloat))) {
+            ShowDiscardAllGitModal = true;
+        }
+    }
+
+    if (ShowDiscardAllGitModal) {
+        const float HalfFloat = 0.5f;
+
+        ImGui::OpenPopup("Discard All Git Changes");
+
+        ImGuiIO& IoRef = ImGui::GetIO();
+        ImVec2 CenterPos(IoRef.DisplaySize.x * HalfFloat, IoRef.DisplaySize.y * HalfFloat);
+        ImGui::SetNextWindowPos(CenterPos, ImGuiCond_Appearing, ImVec2(HalfFloat, HalfFloat));
+
+        if (ImGui::BeginPopupModal("Discard All Git Changes", &ShowDiscardAllGitModal, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("Discard all uncommitted changes in this repository?");
+            ImGui::TextDisabled("This will revert modified files and delete untracked files.");
+            ImGui::Separator();
+
+            if (ImGui::Button("Discard All")) {
+                std::vector<GitFileStatus> PrevChanges = Git.GetChangedFiles();
+                std::string Out = Git.DiscardAllChanges(CurrentFolderPath);
+                AddLog("Git Discard All: " + Out);
+                RefreshWorkspace();
+
+                for (const auto& Entry : PrevChanges) {
+                    ReloadOpenTabFromDisk(Entry.FullPath);
+                }
+
+                ShowDiscardAllGitModal = false;
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::SameLine();
+
+            if (ImGui::Button("Cancel")) {
+                ShowDiscardAllGitModal = false;
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::EndPopup();
+        }
+    }
+
     if (!Git.GetLastStatusMessage().empty()) {
         ImGui::TextWrapped("%s", Git.GetLastStatusMessage().c_str());
     }
@@ -485,6 +557,17 @@ void CodeEditor::RenderGitSidebar() {
             }
             if (Item.IsStaged && ImGui::MenuItem("Unstage File")) {
                 Git.UnstageFile(CurrentFolderPath, Item.RelativePath);
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Discard Changes")) {
+                std::string TargetFullPath = Item.FullPath;
+                std::string Out = Git.DiscardFile(CurrentFolderPath, Item.RelativePath, IsUntracked);
+                AddLog("Git Discard: " + Out);
+                RefreshWorkspace();
+                ReloadOpenTabFromDisk(TargetFullPath);
+                ImGui::EndPopup();
+                ImGui::PopID();
+                break;
             }
             ImGui::EndPopup();
         }

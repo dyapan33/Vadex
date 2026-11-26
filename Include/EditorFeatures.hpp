@@ -41,7 +41,9 @@ public:
     void OnUpdateUi(ScintillaHost& Host);
     bool HandleBackspacePair(ScintillaHost& Host);
     bool HandleTabSnippet(ScintillaHost& Host, const std::string& FileName);
+    bool HandleEnterEmmet(ScintillaHost& Host, const std::string& FileName);
     bool HandleEscapeSnippet(ScintillaHost& Host);
+    void InsertHtmlBoilerplate(ScintillaHost& Host);
 
     void AddNextOccurrence(ScintillaHost& Host);
     void AddPreviousOccurrence(ScintillaHost& Host);

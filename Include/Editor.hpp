@@ -23,6 +23,7 @@
 #include "Include/IntelliSense.hpp"
 #include "Include/DebuggerClient.hpp"
 #include "Include/MarkdownPreview.hpp"
+#include "Include/ImageViewer.hpp"
 
 
 
@@ -68,6 +69,7 @@ struct FileTab {
     sptr_t ScintillaDoc;
     bool IsModified;
     bool IsReadOnly;
+    bool IsImage;
     int CursorLine;
     int CursorColumn;
 };
@@ -223,6 +225,8 @@ private:
     bool MarkdownDirty;
     bool ShowAboutModal;
     bool ShowSettingsWindow;
+    bool ShowDiscardAllGitModal;
+    ImageViewer ImgViewer;
     std::vector<NavigationLocation> NavHistory;
     int NavHistoryIndex;
     bool IsNavigatingHistory;
@@ -269,7 +273,10 @@ private:
     void PollDebuggerEvents();
     void LaunchNewWindow();
     void CreateNewTextFile();
+    void CreateNewCodeFile();
     void OpenWelcomeTab();
+    void OpenUpdatesPage();
+    void ReloadOpenTabFromDisk(const std::string& FilePath);
     void RenderAboutModal();
     void RecordNavigationPoint();
     void NavigateBack();
@@ -394,11 +401,11 @@ private:
                 RecordActivePopupRect();
                 PushDropdownFont();
 
-                if (ImGui::MenuItem("New Text File", "Ctrl+N")) {
+                if (ImGui::MenuItem("New Text File", "Ctrl+N", false, HasActiveFolder)) {
                     CreateNewTextFile();
                 }
-                if (ImGui::MenuItem("New Code File")) {
-                    CreateNewTab("Untitled.cpp", "// New Code File\n");
+                if (ImGui::MenuItem("New Code File", nullptr, false, HasActiveFolder)) {
+                    CreateNewCodeFile();
                 }
                 if (ImGui::MenuItem("New Window", "Ctrl+Shift+N")) {
                     LaunchNewWindow();
@@ -917,6 +924,9 @@ private:
                 if (ImGui::MenuItem("Welcome (Welcome.md)")) {
                     OpenWelcomeTab();
                 }
+                if (ImGui::MenuItem("Check for Updates")) {
+                    OpenUpdatesPage();
+                }
 
                 ImGui::Separator();
 
@@ -1124,6 +1134,7 @@ public:
         MarkdownDirty = true;
         ShowAboutModal = false;
         ShowSettingsWindow = false;
+        ShowDiscardAllGitModal = false;
         NavHistoryIndex = NegativeOneInt;
         IsNavigatingHistory = false;
         LastEditLocation = { "", OneInt, OneInt };
@@ -1167,6 +1178,12 @@ public:
     }
 
     void Initialize(GLFWwindow* WindowPointer);
+    void InitializeVulkanContext(VkPhysicalDevice PhysDev, VkDevice LogDev, uint32_t QueueFam, VkQueue Queue) {
+        ImgViewer.SetVulkanContext(PhysDev, LogDev, QueueFam, Queue);
+    }
+    void ShutdownVulkanContext() {
+        ImgViewer.Shutdown();
+    }
     void CreateNewTab(const std::string& Name, const std::string& Content, bool ReadOnly = false);
     void OpenFileFromDisk(const std::string& Path);
     void OpenFolderFromDisk(const std::string& Path);

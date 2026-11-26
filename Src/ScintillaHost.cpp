@@ -232,6 +232,21 @@ LRESULT CALLBACK ScintillaHost::EditorSubclassProc(HWND Hwnd, UINT Msg, WPARAM W
         return HandledResult;
     }
 
+    if (Host != nullptr && Msg == WM_LBUTTONUP) {
+        const SHORT HighBitMask = static_cast<SHORT>(0x8000);
+        bool IsCtrlHeld = ((GetKeyState(VK_CONTROL) & HighBitMask) != ZeroIntVal);
+
+        if (IsCtrlHeld && Host->OriginalEditorProc != nullptr) {
+            LRESULT Res = CallWindowProcW(Host->OriginalEditorProc, Hwnd, Msg, WParam, LParam);
+
+            if (Host->CtrlClickHandler) {
+                Host->CtrlClickHandler();
+            }
+
+            return Res;
+        }
+    }
+
     if (Host != nullptr && (Msg == WM_KEYDOWN || Msg == WM_SYSKEYDOWN || Msg == WM_CHAR)) {
         if (Host->KeyDownHandler && Host->KeyDownHandler(Msg, WParam, LParam)) {
             return HandledResult;
@@ -322,6 +337,10 @@ bool ScintillaHost::Initialize(HWND ParentHwnd) {
     Call(SCI_SETVSCROLLBAR, OneIntVal);
     Call(SCI_SETSCROLLWIDTHTRACKING, OneIntVal);
     Call(SCI_AUTOCSETIGNORECASE, OneIntVal);
+    Call(SCI_AUTOCSETORDER, SC_ORDER_PERFORMSORT);
+    Call(SCI_AUTOCSETAUTOHIDE, OneIntVal);
+    Call(SCI_AUTOCSETDROPRESTOFWORD, OneIntVal);
+    Call(SCI_AUTOCSETCANCELATSTART, ZeroUptr);
     Call(SCI_AUTOCSETMAXHEIGHT, AutoCompleteMaxHeight);
 
     ApplyBaseDarkTheme();
@@ -372,6 +391,11 @@ sptr_t ScintillaHost::Call(unsigned int Message, uptr_t WParam, sptr_t LParam) c
 // Registers the keyboard shortcut interception handler for the Scintilla HWND.
 void ScintillaHost::SetKeyDownHandler(std::function<bool(UINT, WPARAM, LPARAM)> Handler) {
     KeyDownHandler = std::move(Handler);
+}
+
+// Registers the Ctrl+Click navigation callback for Go to Definition.
+void ScintillaHost::SetCtrlClickHandler(std::function<void()> Handler) {
+    CtrlClickHandler = std::move(Handler);
 }
 
 // Repositions and resizes the Scintilla child window when bounds change.

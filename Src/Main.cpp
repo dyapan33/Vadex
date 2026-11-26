@@ -91,12 +91,14 @@ static void SetupVulkan(ImVector<const char*>& InstanceExtensions) {
     vkGetDeviceQueue(GDevice, GQueueFamily, ZeroIndex, &GQueue);
 
     VkDescriptorPoolSize PoolSizes[] = {
-        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, PoolCapacity }
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, PoolCapacity },
+        { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, PoolCapacity }
     };
+    const uint32_t MaxPoolSets = PoolCapacity * static_cast<uint32_t>(IM_ARRAYSIZE(PoolSizes));
     VkDescriptorPoolCreateInfo PoolInfo = {};
     PoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     PoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-    PoolInfo.maxSets = PoolCapacity;
+    PoolInfo.maxSets = MaxPoolSets;
     PoolInfo.poolSizeCount = static_cast<uint32_t>(IM_ARRAYSIZE(PoolSizes));
     PoolInfo.pPoolSizes = PoolSizes;
     Err = vkCreateDescriptorPool(GDevice, &PoolInfo, GAllocator, &GDescriptorPool);
@@ -580,6 +582,7 @@ int main(int Argc, char** Argv) {
 
     CodeEditor EditorApp;
     EditorApp.Initialize(Window);
+    EditorApp.InitializeVulkanContext(GPhysicalDevice, GDevice, GQueueFamily, GQueue);
     GEditorInstance = &EditorApp;
 
     HWND Hwnd = glfwGetWin32Window(Window);
@@ -681,6 +684,7 @@ int main(int Argc, char** Argv) {
     Err = vkDeviceWaitIdle(GDevice);
     CheckVulkanResult(Err);
 
+    EditorApp.ShutdownVulkanContext();
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
